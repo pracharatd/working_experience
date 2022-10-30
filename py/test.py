@@ -1,8 +1,15 @@
-nums = [1,2,3,4,5,6,7,8,9]
-
-i = 1
-
-for j in range(len(nums)-1):
-    if (nums[i] - nums[j]) == 1:
-        print(i)
-    i+= 1
+def tef_test():
+    x, y = 1, 2
+    try:
+        x += 2
+        y += 4
+        raise NotImplementedError
+        return x
+    except Exception:
+        x += 4
+        y += 8
+        return x
+    finally:
+        x += 8
+        y += 16
+        return y
