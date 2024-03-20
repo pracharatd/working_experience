@@ -1,0 +1,48 @@
+import pandas as pd
+
+# Specify the full path to your Excel file
+file_path = r'XXX'
+
+# Specify the full path to the log file
+log_file_path = r'XXX'
+
+# Open the log file in write mode (truncating existing content)
+with open(log_file_path, 'w') as log_file:
+
+    # Load the Excel file
+    excel_file = pd.ExcelFile(file_path)
+
+    # Iterate over all sheets in the Excel file
+    for sheet_name in excel_file.sheet_names:
+        log_file.write("Processing sheet: {}\n".format(sheet_name))
+        
+        # Load the sheet into a pandas DataFrame
+        try:
+            df = pd.read_excel(excel_file, sheet_name)
+
+            # Specify the column to search for 'Y' or 'BK'
+            search_column = 'Unnamed: 13' #'Unnamed: 13' = Column N, 'Unnamed: 14' = Column O in CSV file
+ 
+            # Find rows where 'Y' or 'BK' is in the specified column
+            matching_rows = df[df[search_column].isin(['Y', 'BK'])]
+
+            # If there are no matching rows, log and continue to the next sheet
+            if matching_rows.empty:
+                log_file.write("No rows with 'Y' or 'BK' in column '{}'.\n\n".format(search_column))
+                continue
+
+            # Retrieve data from 'Unnamed: 9' for the matching rows
+            result_data_from_column = matching_rows['Unnamed: 9'].tolist() #'Unnamed: 9' = Column J, 'Unnamed: 10' = Column K
+
+            # Remove duplicates by converting the list to a set and then back to a list
+            unique_data = list(set(result_data_from_column))
+
+            # Format the output and write it to the log file
+            formatted_output = ", ".join(map(str, unique_data))
+            log_file.write("Unique data from column 'Unnamed: 9' corresponding to rows where column '{}' is 'Y' or 'BK' in column '{}': {}\n".format(search_column, search_column, formatted_output))
+
+            log_file.write("\n")  # Separate output for each sheet
+
+        except KeyError:
+            log_file.write("Sheet '{}' does not have the specified column '{}'. Skipping...\n\n".format(sheet_name, search_column))
+            continue
