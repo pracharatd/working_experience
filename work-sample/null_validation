@@ -1,0 +1,161 @@
+import csv
+import os
+import pyodbc
+import logging
+import subprocess
+
+# Set up logging
+logging.basicConfig(level=logging.INFO)
+
+def write_to_csv(filename, content):
+    with open(filename, 'w', newline='') as csvfile:
+        writer = csv.writer(csvfile)
+        writer.writerow(["Table", "Columns"])
+        for line in content:
+            writer.writerow(line)
+
+def open_notepad(filename):
+    subprocess.Popen(['notepad.exe', filename], shell=True)
+
+# Set connection parameters
+server = 'xxx'
+database = 'xxx'
+username = 'xxx'
+password = os.environ.get('xxx')  # Replace with your actual environment variable
+driver = '{ODBC Driver 17 for SQL Server}'
+
+# Create ODBC connection string
+connection_string = f'Driver={driver};Server={server};Database={database};Uid={username};Pwd={password};Encrypt=yes;Authentication=ActiveDirectoryInteractive'
+
+try:
+    # Connect to the database
+    connection = pyodbc.connect(connection_string)
+
+    # Create a cursor
+    cursor = connection.cursor()
+
+    # Get table names and schemas
+    table_query = """
+        SELECT TABLE_SCHEMA, TABLE_NAME
+        FROM INFORMATION_SCHEMA.TABLES
+        WHERE TABLE_SCHEMA IN ('xxx') AND TABLE_NAME IN ('xxx')
+    """
+    cursor.execute(table_query)
+    tables = cursor.fetchall()
+
+    # Output content
+    output_content = []
+
+    # Iterate through tables
+    for table in tables:
+        table_schema, table_name = table.TABLE_SCHEMA, table.TABLE_NAME
+ 
+        # Get column names for the current table
+        column_query_template = """
+            SELECT COLUMN_NAME
+            FROM INFORMATION_SCHEMA.COLUMNS
+            WHERE TABLE_NAME = '{table_name}' AND TABLE_SCHEMA = '{table_schema}'
+        """
+
+        # Replace placeholders in the template
+        column_query = column_query_template.format(
+            table_name=table_name, table_schema=table_schema
+        )
+
+        # Execute the query
+        cursor.execute(column_query)
+
+        # Fetch the columns
+        columns = [row.COLUMN_NAME for row in cursor.fetchall()]
+
+        # Check if Marker exists in columns
+        if 'Marker' in columns:
+            matching_columns = []
+            # Construct and execute the condition query for each column
+            for column in columns:
+                condition_gw_1 = """
+                    SELECT COUNT({column}) 
+                    FROM [{table_schema}].[{table_name}] 
+                    WHERE Marker = 'XX' 
+                    AND {column} IS NOT NULL;
+                """
+                condition_gw_2 = """
+                    SELECT COUNT(*) FROM [{table_schema}].[{table_name}] WHERE Marker = 'XX';
+                """
+                condition_gis_1 = """
+                    SELECT COUNT({column}) 
+                    FROM [{table_schema}].[{table_name}] 
+                    WHERE Marker = 'XXX' 
+                    AND {column} IS NOT NULL;
+                """
+                condition_gis_2 = """
+                    SELECT COUNT(*) FROM [{table_schema}].[{table_name}] WHERE Marker = 'XX';
+                """
+                # Replace placeholders in the template and execute the condition
+                condition_query = condition_gw_1.format(
+                    table_name=table_name, table_schema=table_schema, column=column
+                )
+                cursor.execute(condition_query)
+                result_gw_1 = cursor.fetchone()[0]
+
+                condition_query = condition_gw_2.format(
+                    table_name=table_name, table_schema=table_schema
+                )
+                cursor.execute(condition_query)
+                result_gw_2 = cursor.fetchone()[0]
+
+                condition_query = condition_gis_1.format(
+                    table_name=table_name, table_schema=table_schema, column=column
+                )
+                cursor.execute(condition_query)
+                result_gis_1 = cursor.fetchone()[0]
+
+                condition_query = condition_gis_2.format(
+                    table_name=table_name, table_schema=table_schema
+                )
+                cursor.execute(condition_query)
+                result_gis_2 = cursor.fetchone()[0]
+
+                # Add the condition to break the loop
+                if result_gw_2 == 0 or result_gis_2 == 0:
+                    break
+                # Print the information            
+                print(table_name, column)
+                print(result_gw_1, result_gw_2, result_gis_1, result_gis_2)
+
+                # Execute the query
+                if ((result_gw_2 != 0 and result_gw_1 <= 0.5*result_gw_2) and (result_gis_1 != 0 and result_gis_1 == result_gis_2)): # or (result_gis_1 != result_gis_2):
+                    matching_columns.append(column)
+
+                # Print the information
+                print(matching_columns)
+        
+        print(table_name)
+
+        # Get the result
+        if len(matching_columns) > 0:
+            output_content.append([f"{table_schema}.{table_name}", ", ".join(matching_columns)])
+
+        #else:
+            # Handle the case where the Source_System_Code column does not exist in the table or when the condition is not met
+            output_content.append([f"{table_schema}.{table_name}", "No matching columns"])
+
+    # Write the output content to a CSV file
+    filename = 'XXX.csv'
+    write_to_csv(filename, output_content)
+
+    # Open Notepad with the output file
+    open_notepad(filename)
+
+    logging.info(f"Output has been written to '{filename}' and opened with Notepad.")
+
+except pyodbc.Error as e:
+    # Handle connection errors
+    logging.error(f'Error: {e}')
+
+finally:
+    # Close the cursor and connection in the finally block to ensure they're always closed
+    if cursor:
+        cursor.close()
+    if connection:
+        connection.close()
